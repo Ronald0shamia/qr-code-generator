@@ -1,0 +1,35 @@
+<?php
+/*
+Plugin Name: QR Code Generator
+Plugin URI: https://mrs-dev.com
+Description: Ein einfacher QR-Code-Generator, den Besucher direkt auf deiner Webseite nutzen können.
+Version: 1.0
+Author: Raeed
+Author URI: https://mrs-dev.com
+License: GPL2
+*/
+
+if (!defined('ABSPATH')) exit; // Direktzugriff verhindern
+
+// Styles und Scripts laden
+function qrg_enqueue_scripts() {
+    wp_enqueue_style('qrg-style', plugin_dir_url(__FILE__) . 'assets/style.css');
+    wp_enqueue_script('qrg-script', plugin_dir_url(__FILE__) . 'assets/qrcode.min.js', array(), '1.0', true);
+    wp_enqueue_script('qrg-main', plugin_dir_url(__FILE__) . 'assets/main.js', array('qrg-script'), '1.0', true);
+}
+add_action('wp_enqueue_scripts', 'qrg_enqueue_scripts');
+
+// Shortcode [qr_generator]
+function qrg_display_generator() {
+    ob_start(); ?>
+    <div class="qrg-container">
+        <h2>🔲 QR-Code Generator</h2>
+        <input type="text" id="qrg-text" placeholder="Gib deinen Text oder eine URL ein" />
+        <button id="qrg-generate">QR-Code erstellen</button>
+        <div id="qrg-result"></div>
+        <button id="qrg-download" style="display:none;">QR-Code herunterladen</button>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('qr_generator', 'qrg_display_generator');

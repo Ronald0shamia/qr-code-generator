@@ -1,0 +1,30 @@
+.qrg-container {
+  max-width: 400px;
+  margin: 30px auto;
+  padding: 20px;
+  text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  background: #fff;
+}
+.qrg-container input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.qrg-container button {
+  padding: 10px 15px;
+  background: #0073aa;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.qrg-container button:hover {
+  background: #005f8d;
+}
+#qrg-result {
+  margin-top: 20px;
+}
