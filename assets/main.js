@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('qrg-generate');
     const resultDiv = document.getElementById('qrg-result');
     const downloadBtn = document.getElementById('qrg-download');
+    const sizeSelect = document.getElementById('qrg-size');
+    const colorInput = document.getElementById('qrg-color');
+    const bgInput = document.getElementById('qrg-bg');
 
     generateBtn.addEventListener('click', () => {
         const text = input.value.trim();
@@ -14,8 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
         resultDiv.innerHTML = '';
         const qr = new QRCode(resultDiv, {
             text: text,
-            width: 200,
-            height: 200
+            width: parseInt(sizeSelect.value),
+            height: parseInt(sizeSelect.value),
+            colorDark: colorInput.value,
+            colorLight: bgInput.value
         });
 
         setTimeout(() => {

@@ -3,7 +3,7 @@
 Plugin Name: QR Code Generator
 Plugin URI: https://mrs-dev.com
 Description: Ein einfacher QR-Code-Generator, den Besucher direkt auf deiner Webseite nutzen können.
-Version: 1.0
+Version: 1.1
 Author: Raeed
 Author URI: https://mrs-dev.com
 License: GPL2
@@ -25,6 +25,23 @@ function qrg_display_generator() {
     <div class="qrg-container">
         <h2>🔲 QR-Code Generator</h2>
         <input type="text" id="qrg-text" placeholder="Gib deinen Text oder eine URL ein" />
+        
+        <div class="qrg-options">
+            <label>Größe:</label>
+            <select id="qrg-size">
+                <option value="150">150 px</option>
+                <option value="200" selected>200 px</option>
+                <option value="300">300 px</option>
+                <option value="400">400 px</option>
+            </select>
+
+            <label>Farbe:</label>
+            <input type="color" id="qrg-color" value="#000000" />
+
+            <label>Hintergrund:</label>
+            <input type="color" id="qrg-bg" value="#ffffff" />
+        </div>
+
         <button id="qrg-generate">QR-Code erstellen</button>
         <div id="qrg-result"></div>
         <button id="qrg-download" style="display:none;">QR-Code herunterladen</button>
