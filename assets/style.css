@@ -63,3 +63,7 @@
   margin-top: 20px;
   min-height: 200px;
 }
+
+.qrg-tab { display: none; }
+.qrg-tab.active { display: block; }
+.qrg-admin-wrap h2.nav-tab-wrapper { margin-bottom: 20px; }
