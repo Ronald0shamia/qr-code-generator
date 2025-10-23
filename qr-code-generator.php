@@ -21,8 +21,23 @@ add_action('wp_enqueue_scripts', 'qrg_enqueue_scripts');
 
 // Shortcode [qr_generator]
 function qrg_display_generator() {
-    ob_start(); ?>
-    <div class="qrg-container">
+    ob_start(); 
+    $bg_color = get_option('qrg_form_bg_color', '#ffffff');
+    $width = get_option('qrg_form_width', '80%');
+    $padding = get_option('qrg_form_padding', '20px');
+    $margin = get_option('qrg_form_margin', '20px auto');
+    ?>
+
+<div class="qrg-container" style="
+    background-color: <?php echo esc_attr($bg_color); ?>;
+    width: <?php echo esc_attr($width); ?>;
+    padding: <?php echo esc_attr($padding); ?>;
+    margin: <?php echo esc_attr($margin); ?>;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    ">
+    <h2>🔲 QR-Code Generator</h2>
+    <input type="text" id="qrg-text" placeholder="Gib deinen Text oder eine URL ein" />
         <h2>🔲 QR-Code Generator</h2>
         <input type="text" id="qrg-text" placeholder="Gib deinen Text oder eine URL ein" />
         
