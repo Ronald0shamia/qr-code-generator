@@ -3,46 +3,59 @@
   margin: 30px auto;
   padding: 25px;
   text-align: center;
-  border-radius: 14px;
+  border-radius: 10px;
   background: #f9fafb;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
   font-family: system-ui, sans-serif;
 }
 
+.qrg-container *,
+.qrg-container *::before,
+.qrg-container *::after {
+  box-sizing: border-box;
+}
+
 .qrg-container h2 {
-  margin-bottom: 15px;
+  margin: 0 0 15px;
   color: #222;
+  font-size: 24px;
+}
+
+.qrg-field,
+.qrg-options label {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.qrg-field {
+  margin-bottom: 15px;
 }
 
 .qrg-container input[type="text"] {
   width: 100%;
   padding: 12px;
-  margin-bottom: 15px;
   border: 1px solid #ccc;
   border-radius: 8px;
 }
 
 .qrg-options {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 15px;
 }
 
-.qrg-options label {
-  font-size: 14px;
-  flex: 1 0 100%;
-  text-align: left;
-  margin-top: 5px;
-}
-
 .qrg-options select,
 .qrg-options input[type="color"] {
-  flex: 1 0 30%;
+  width: 100%;
+  min-height: 38px;
   padding: 5px;
   border-radius: 6px;
   border: 1px solid #ccc;
+  background: #fff;
 }
 
 .qrg-container button {
@@ -55,15 +68,49 @@
   font-size: 15px;
 }
 
-.qrg-container button:hover {
+.qrg-container button:hover,
+.qrg-container button:focus {
   background: #005f8d;
 }
 
-#qrg-result {
+.qrg-download {
+  margin-top: 12px;
+}
+
+.qrg-result {
+  display: grid;
+  place-items: center;
   margin-top: 20px;
   min-height: 200px;
 }
 
-.qrg-tab { display: none; }
-.qrg-tab.active { display: block; }
-.qrg-admin-wrap h2.nav-tab-wrapper { margin-bottom: 20px; }
+.qrg-result img,
+.qrg-result canvas,
+.qrg-result svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.qrg-tab {
+  display: none;
+}
+
+.qrg-tab.active {
+  display: block;
+}
+
+.qrg-admin-wrap h2.nav-tab-wrapper {
+  margin-bottom: 20px;
+}
+
+#qrg-preview-container {
+  border: 1px solid #ddd;
+  padding: 20px;
+  background: #fff;
+}
+
+@media (max-width: 520px) {
+  .qrg-options {
+    grid-template-columns: 1fr;
+  }
+}

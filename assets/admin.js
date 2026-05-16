@@ -1,11 +1,14 @@
-jQuery(document).ready(function($) {
-    // Tabs umschalten
-    $('.nav-tab').on('click', function(e) {
-        e.preventDefault();
+jQuery(function ($) {
+    $('.qrg-tab').not('.active').hide();
+
+    $('.nav-tab').on('click', function (event) {
+        event.preventDefault();
+
+        const target = $(this).attr('href');
+
         $('.nav-tab').removeClass('nav-tab-active');
         $(this).addClass('nav-tab-active');
 
-        const target = $(this).attr('href');
         $('.qrg-tab').removeClass('active').hide();
         $(target).addClass('active').show();
 
@@ -15,13 +18,25 @@ jQuery(document).ready(function($) {
     });
 
     function loadPreview() {
-        $('#qrg-preview-container').html('<em>Vorschau wird geladen...</em>');
-        $.post(qrg_ajax.ajax_url, { action: 'qrg_preview' }, function(response) {
-            if (response.success) {
-                $('#qrg-preview-container').html(response.data);
-            } else {
-                $('#qrg-preview-container').html('<strong>Fehler beim Laden!</strong>');
+        const preview = $('#qrg-preview-container');
+        preview.html('<em>Vorschau wird geladen...</em>');
+
+        $.post(qrg_ajax.ajax_url, {
+            action: 'qrg_preview',
+            nonce: qrg_ajax.nonce
+        }).done(function (response) {
+            if (!response.success) {
+                preview.html('<strong>Fehler beim Laden.</strong>');
+                return;
             }
+
+            preview.html(response.data);
+
+            if (window.qrgInitGenerators) {
+                window.qrgInitGenerators(preview[0]);
+            }
+        }).fail(function () {
+            preview.html('<strong>Fehler beim Laden.</strong>');
         });
     }
 });
