@@ -15,7 +15,8 @@ function qrg_admin_scripts($hook) {
 
     wp_enqueue_style('qrg-style', QRG_PLUGIN_URL . 'assets/style.css', array(), QRG_VERSION);
     wp_enqueue_script('qrg-script', QRG_PLUGIN_URL . 'assets/qrcode.min.js', array(), '1.0', true);
-    wp_enqueue_script('qrg-main', QRG_PLUGIN_URL . 'assets/main.js', array('qrg-script'), QRG_VERSION, true);
+    wp_enqueue_script('qrg-tree-renderer', QRG_PLUGIN_URL . 'assets/tree-renderer.js', array('qrg-script'), QRG_VERSION, true);
+    wp_enqueue_script('qrg-main', QRG_PLUGIN_URL . 'assets/main.js', array('qrg-script', 'qrg-tree-renderer'), QRG_VERSION, true);
     wp_enqueue_script('qrg-admin-js', QRG_PLUGIN_URL . 'assets/admin.js', array('jquery', 'qrg-main'), QRG_VERSION, true);
     wp_localize_script(
         'qrg-admin-js',
