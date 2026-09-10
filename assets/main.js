@@ -6,10 +6,11 @@
     function saveBlob(blob, name) { var url = URL.createObjectURL(blob); save(url, name); window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000); }
     function validate(canvas, expected) {
         if (!('BarcodeDetector' in window)) { return Promise.resolve(false); }
-        return new Promise(function (resolve) { canvas.toBlob(function (blob) {
-            if (!blob) { resolve(false); return; }
-            new BarcodeDetector({ formats: ['qr_code'] }).detect(blob).then(function (codes) { resolve(codes.some(function (code) { return code.rawValue === expected; })); }).catch(function () { resolve(false); });
-        }, 'image/png'); });
+        // BarcodeDetector accepts CanvasImageSource objects. Passing a Blob makes
+        // Chrome reject the scan even when the generated QR is valid.
+        return new BarcodeDetector({ formats: ['qr_code'] }).detect(canvas).then(function (codes) {
+            return codes.some(function (code) { return code.rawValue === expected; });
+        }).catch(function () { return false; });
     }
     function initGenerator(container) {
         if (container.dataset.qrgReady === '1') { return; }
