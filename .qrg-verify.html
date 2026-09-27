@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<script src="assets/qrcode.min.js"></script>
+<script src="assets/jsqr.js"></script>
+<script src="assets/tree-renderer.js"></script>
+<script>
+window.addEventListener('load', function () {
+    var payload = 'https://example.test/tree-qr-validation';
+    var tests = [
+        { name: 'current', structure: '#14212b', blossom: '#a63d57', ground: '#356a45', depth: 22 },
+        { name: 'single-colour', structure: '#14212b', blossom: '#14212b', ground: '#14212b', depth: 16 },
+        { name: 'flat', structure: '#000000', blossom: '#000000', ground: '#000000', depth: 0 }
+    ];
+    tests.forEach(function (test) {
+        var artwork = QRGTreeRenderer.render(payload, 2048, { structure: test.structure, background: '#ffffff', blossom: test.blossom, ground: test.ground, depth: test.depth, density: 72, perspective: test.name === 'current' ? 6 : 0, shadow: test.name === 'current', mode: 'safe' }).canvas;
+        var decoded = jsQR(artwork.getContext('2d').getImageData(0, 0, artwork.width, artwork.height).data, artwork.width, artwork.height, { inversionAttempts: 'dontInvert' });
+        document.body.insertAdjacentHTML('beforeend', '<p id="' + test.name + '">' + test.name + ': ' + ((decoded && decoded.data === payload) ? 'PASS' : 'FAIL') + '</p>');
+    });
+    var generated = QRGTreeRenderer.render(payload, 2048, {}).matrix, canonical = document.createElement('canvas'), context, cell = 2048 / (generated.length + 8);
+    canonical.width = canonical.height = 2048; context = canonical.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0, 0, 2048, 2048); context.fillStyle = '#000';
+    generated.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { context.fillRect(Math.floor((column + 4) * cell), Math.floor((row + 4) * cell), Math.ceil((column + 5) * cell) - Math.floor((column + 4) * cell), Math.ceil((row + 5) * cell) - Math.floor((row + 4) * cell)); } }); });
+    decoded = jsQR(context.getImageData(0, 0, 2048, 2048).data, 2048, 2048, { inversionAttempts: 'dontInvert' });
+    document.body.insertAdjacentHTML('beforeend', '<p id="canonical">canonical: ' + ((decoded && decoded.data === payload) ? 'PASS' : 'FAIL') + '</p>');
+});
+</script>

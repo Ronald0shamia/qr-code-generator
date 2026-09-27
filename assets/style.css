@@ -118,8 +118,17 @@
 }
 
 .qrg-tree-options select,
-.qrg-tree-options input[type="range"] {
+.qrg-tree-options input[type="range"],
+.qrg-tree-options input[type="color"] {
   width: 100%;
+}
+
+.qrg-tree-options input[type="color"] {
+  min-height: 38px;
+  padding: 3px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
 }
 
 .qrg-tree-depth-output {
@@ -129,8 +138,12 @@
 
 .qrg-validation {
   margin: 12px 0 0;
-  color: #a62d2d;
+  color: #44515b;
   font-size: 14px;
+}
+
+.qrg-validation-error {
+  color: #a62d2d;
 }
 
 .qrg-downloads {
