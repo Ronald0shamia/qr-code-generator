@@ -89,13 +89,14 @@ function qrg_get_generator_markup() {
             </div>
             <p id="qrg-design-help" class="screen-reader-text"><?php esc_html_e('Choose the standard QR code or the validated 3D Tree QR code.', 'qr-code-generator'); ?></p>
             <div class="qrg-tree-options" hidden>
-                <label><span><?php esc_html_e('Tree style', 'qr-code-generator'); ?></span><select class="qrg-tree-style"><option value="blossom"><?php esc_html_e('Blossom Tree', 'qr-code-generator'); ?></option></select></label>
+                <label><span><?php esc_html_e('Tree style', 'qr-code-generator'); ?></span><select class="qrg-tree-style"><option value="blossom"><?php esc_html_e('Blossom Tree', 'qr-code-generator'); ?></option><option value="golden"><?php esc_html_e('Golden Tree', 'qr-code-generator'); ?></option><option value="blue"><?php esc_html_e('Blue Tree', 'qr-code-generator'); ?></option><option value="purple"><?php esc_html_e('Purple Tree', 'qr-code-generator'); ?></option></select></label>
                 <label><span><?php esc_html_e('Render mode', 'qr-code-generator'); ?></span><select class="qrg-tree-mode"><option value="safe"><?php esc_html_e('Scan-safe', 'qr-code-generator'); ?></option><option value="artistic"><?php esc_html_e('Artistic', 'qr-code-generator'); ?></option></select></label>
                 <label><span><?php esc_html_e('Tree depth', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-depth" min="16" max="30" value="22" step="1"><output class="qrg-tree-depth-output">22%</output></label>
                 <label><span><?php esc_html_e('Tree density', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-density" min="35" max="100" value="72" step="1"><output class="qrg-tree-density-output">72%</output></label>
                 <label><span><?php esc_html_e('Perspective', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-perspective" min="0" max="14" value="6" step="1"><output class="qrg-tree-perspective-output">6</output></label>
                 <label class="qrg-tree-shadow-label"><input type="checkbox" class="qrg-tree-shadow" checked> <?php esc_html_e('Shadow', 'qr-code-generator'); ?></label>
                 <label><span><?php esc_html_e('Tree / blossom color', 'qr-code-generator'); ?></span><input type="color" class="qrg-tree-blossom" value="#a63d57"></label>
+                <label><span><?php esc_html_e('Trunk color', 'qr-code-generator'); ?></span><input type="color" class="qrg-tree-trunk" value="#754126"></label>
                 <label><span><?php esc_html_e('Ground color', 'qr-code-generator'); ?></span><input type="color" class="qrg-tree-ground" value="#356a45"></label>
                 <label><span><?php esc_html_e('Export size', 'qr-code-generator'); ?></span><select class="qrg-export-size"><option value="1024">1024 × 1024</option><option value="2048">2048 × 2048</option></select></label>
             </div>

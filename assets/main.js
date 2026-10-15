@@ -3,6 +3,12 @@
     'use strict';
 
     var validationMessage = 'Der 3D-QR-Code konnte nicht zuverlässig erkannt werden. Bitte versuchen Sie eine andere Einstellung.';
+    var treePalettes = {
+        blossom: { blossom: '#a63d57', trunk: '#754126', ground: '#356a45' },
+        golden: { blossom: '#a66a22', trunk: '#754126', ground: '#52633a' },
+        blue: { blossom: '#267e9b', trunk: '#754126', ground: '#356a45' },
+        purple: { blossom: '#70469b', trunk: '#754126', ground: '#356a45' }
+    };
 
     function save(url, filename) {
         var link = document.createElement('a');
@@ -40,11 +46,29 @@
         });
     }
 
+    function validateSvgArtwork(markup, size, expected) {
+        return new Promise(function (resolve) {
+            var url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
+            var image = new Image();
+            image.onload = function () {
+                var canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                canvas.getContext('2d').drawImage(image, 0, 0, size, size);
+                URL.revokeObjectURL(url);
+                validateArtwork(canvas, expected).then(resolve).catch(function () { resolve(false); });
+            };
+            image.onerror = function () { URL.revokeObjectURL(url); resolve(false); };
+            image.src = url;
+        });
+    }
+
     function readTreeOptions(container) {
         return {
             structure: container.querySelector('.qrg-color').value,
             background: container.querySelector('.qrg-bg').value,
             blossom: container.querySelector('.qrg-tree-blossom').value,
+            trunk: container.querySelector('.qrg-tree-trunk').value,
             ground: container.querySelector('.qrg-tree-ground').value,
             depth: container.querySelector('.qrg-tree-depth').value,
             density: container.querySelector('.qrg-tree-density').value,
@@ -77,6 +101,8 @@
         var densityOutput = container.querySelector('.qrg-tree-density-output');
         var perspective = container.querySelector('.qrg-tree-perspective');
         var perspectiveOutput = container.querySelector('.qrg-tree-perspective-output');
+        var treeStyle = container.querySelector('.qrg-tree-style');
+        var renderToken = 0;
 
         if (!input || !generate || !result || !downloads || !window.QRCode || !window.QRGTreeRenderer) { return; }
         container.dataset.qrgReady = '1';
@@ -91,10 +117,18 @@
 
         modes.forEach(function (mode) { mode.addEventListener('change', updateControls); });
         [depth, density, perspective].forEach(function (control) { control.addEventListener('input', updateControls); });
+        treeStyle.addEventListener('change', function () {
+            var palette = treePalettes[treeStyle.value];
+            if (!palette) { return; }
+            container.querySelector('.qrg-tree-blossom').value = palette.blossom;
+            container.querySelector('.qrg-tree-trunk').value = palette.trunk;
+            container.querySelector('.qrg-tree-ground').value = palette.ground;
+        });
         updateControls();
 
         generate.addEventListener('click', function () {
             var text = input.value.trim();
+            var request = ++renderToken;
             if (!text) { input.focus(); return; }
             result.replaceChildren();
             downloads.hidden = true;
@@ -125,6 +159,7 @@
             notice.classList.remove('qrg-validation-error');
             notice.textContent = '3D-QR-Code wird geprüft …';
             window.requestAnimationFrame(function () {
+                if (request !== renderToken) { return; }
                 var options = readTreeOptions(container);
                 var previewSize = Math.max(640, parseInt(size.value, 10) * 3);
                 var preview = QRGTreeRenderer.render(text, previewSize, options).canvas;
@@ -133,6 +168,7 @@
                 preview.setAttribute('aria-label', '3D blossom tree QR code preview');
                 result.appendChild(preview);
                 validateArtwork(exportCanvas, text).then(function (valid) {
+                    if (request !== renderToken) { return; }
                     generate.disabled = false;
                     if (!valid) {
                         notice.classList.add('qrg-validation-error');
@@ -141,14 +177,18 @@
                     }
                     notice.hidden = true;
                     downloads.hidden = false;
-                    svg.hidden = false;
+                    svg.hidden = true;
                     png.onclick = function () {
                         exportCanvas.toBlob(function (blob) { if (blob) { saveBlob(blob, 'mrs-3d-tree-qr.png'); } }, 'image/png');
                     };
-                    svg.onclick = function () {
-                        saveBlob(new Blob([QRGTreeRenderer.renderSvg(text, exportCanvas.width, options)], { type: 'image/svg+xml;charset=utf-8' }), 'mrs-3d-tree-qr.svg');
-                    };
+                    var svgArtwork = QRGTreeRenderer.renderSvg(text, exportCanvas.width, options);
+                    validateSvgArtwork(svgArtwork, exportCanvas.width, text).then(function (svgValid) {
+                        if (request !== renderToken || !svgValid) { return; }
+                        svg.hidden = false;
+                        svg.onclick = function () { saveBlob(new Blob([svgArtwork], { type: 'image/svg+xml;charset=utf-8' }), 'mrs-3d-tree-qr.svg'); };
+                    });
                 }).catch(function () {
+                    if (request !== renderToken) { return; }
                     generate.disabled = false;
                     notice.classList.add('qrg-validation-error');
                     notice.textContent = validationMessage;

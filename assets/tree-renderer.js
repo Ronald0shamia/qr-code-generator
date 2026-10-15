@@ -59,6 +59,7 @@
             background: raw.background || '#fffaf2',
             structure: raw.structure || '#14212b',
             blossom: raw.blossom || '#a63d57',
+            trunk: raw.trunk || '#754126',
             ground: raw.ground || '#356a45',
             depth: clamp(Number(raw.depth) || 22, 16, 30),
             density: clamp(Number(raw.density) || 72, 35, 100),
@@ -85,7 +86,7 @@
     }
 
     function roleColour(role, options) {
-        if (role === 'trunk' || role === 'branch') { return mix(options.structure, '#754126', 0.78); }
+        if (role === 'trunk' || role === 'branch') { return mix(options.structure, options.trunk, 0.78); }
         if (role === 'blossom') { return darker(options.blossom, 0.23); }
         if (role === 'foliage') { return mix(options.ground, options.blossom, 0.32); }
         if (role === 'ground') { return darker(options.ground, 0.18); }
