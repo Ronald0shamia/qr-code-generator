@@ -38,6 +38,15 @@ Das Plugin nutzt den Shortcode `[qr_generator]`, um das Tool auf einer beliebige
 
 == Changelog ==
 
+= 1.8 =
+* 3D Tree nach Referenzvideo umgebaut: zwei Ansichten desselben Werks - isometrische Diorama-Szene (QR-Code als Plattformboden, Gras auf den drei Finder-Mustern, Voxel-Baum mit Stamm, Aesten und dichter Blaetterkrone, Bluetenblaetter, weiche Schatten) und flache, scannbare Draufsicht
+* Tippen auf den Baum (oder Umschalter Szene / QR-Code) wechselt die Ansicht
+* Neuer Standard-Rendermodus "Garden look": Module in der Blattfarbe mit Tonwert-Variation, Finder-Muster in Gras-Gruen
+* Farbpunkte zur schnellen Auswahl; neue Varianten Red Tree und Summer Tree
+* Downloads: validiertes QR-PNG/SVG und separates Szenenbild (nur Illustration, nicht zum Scannen)
+* Fix: [hidden] wird nicht mehr von display:grid/flex ueberschrieben (Optionspanel und Download-Buttons)
+* Darstellung der flachen Ansicht an die Decoder-Grenzen angepasst (Helligkeits-Obergrenze, hauchduenne Kanten) - in Tests 168/168 dekodiert
+
 = 1.7 =
 * 3D Tree: isometrische Diorama-Szene um den QR-Code (Plattform mit Rasenkante und Seitendicke, konischer Stamm, Äste, Low-Poly-Blütenkrone, Blumen, weiche Schatten) - rein außerhalb von QR-Code und Ruhezone
 * Das angezeigte Vorschaubild ist exakt das validierte Exportbild (ein Render statt zwei)

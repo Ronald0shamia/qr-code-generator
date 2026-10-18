@@ -3,7 +3,7 @@
 Plugin Name: QR Code Generator
 Plugin URI: https://mrs-dev.com
 Description: Ein anpassbarer QR-Code-Generator mit Admin-Einstellungen, Shortcode und Download-Funktion.
-Version: 1.7
+Version: 1.8
 Author: Raeed
 Author URI: https://mrs-dev.com
 License: GPL2
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('QRG_VERSION', '1.7');
+define('QRG_VERSION', '1.8');
 define('QRG_PLUGIN_FILE', __FILE__);
 define('QRG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('QRG_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -89,8 +89,8 @@ function qrg_get_generator_markup() {
             </div>
             <p id="qrg-design-help" class="screen-reader-text"><?php esc_html_e('Choose the standard QR code or the validated 3D Tree QR code.', 'qr-code-generator'); ?></p>
             <div class="qrg-tree-options" hidden>
-                <label><span><?php esc_html_e('Tree style', 'qr-code-generator'); ?></span><select class="qrg-tree-style"><option value="blossom"><?php esc_html_e('Blossom Tree', 'qr-code-generator'); ?></option><option value="golden"><?php esc_html_e('Golden Tree', 'qr-code-generator'); ?></option><option value="blue"><?php esc_html_e('Blue Tree', 'qr-code-generator'); ?></option><option value="purple"><?php esc_html_e('Purple Tree', 'qr-code-generator'); ?></option></select></label>
-                <label><span><?php esc_html_e('Render mode', 'qr-code-generator'); ?></span><select class="qrg-tree-mode"><option value="safe"><?php esc_html_e('Scan-safe', 'qr-code-generator'); ?></option><option value="artistic"><?php esc_html_e('Artistic', 'qr-code-generator'); ?></option></select></label>
+                <label><span><?php esc_html_e('Tree style', 'qr-code-generator'); ?></span><select class="qrg-tree-style"><option value="blossom"><?php esc_html_e('Blossom Tree', 'qr-code-generator'); ?></option><option value="golden"><?php esc_html_e('Golden Tree', 'qr-code-generator'); ?></option><option value="blue"><?php esc_html_e('Blue Tree', 'qr-code-generator'); ?></option><option value="purple"><?php esc_html_e('Purple Tree', 'qr-code-generator'); ?></option><option value="red"><?php esc_html_e('Red Tree', 'qr-code-generator'); ?></option><option value="green"><?php esc_html_e('Summer Tree', 'qr-code-generator'); ?></option></select></label>
+                <label><span><?php esc_html_e('Render mode', 'qr-code-generator'); ?></span><select class="qrg-tree-mode"><option value="garden"><?php esc_html_e('Garden look (reference)', 'qr-code-generator'); ?></option><option value="safe"><?php esc_html_e('Scan-safe', 'qr-code-generator'); ?></option><option value="artistic"><?php esc_html_e('Artistic', 'qr-code-generator'); ?></option></select></label>
                 <label><span><?php esc_html_e('Tree depth', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-depth" min="16" max="30" value="22" step="1"><output class="qrg-tree-depth-output">22%</output></label>
                 <label><span><?php esc_html_e('Tree density', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-density" min="35" max="100" value="72" step="1"><output class="qrg-tree-density-output">72%</output></label>
                 <label><span><?php esc_html_e('Perspective', 'qr-code-generator'); ?></span><input type="range" class="qrg-tree-perspective" min="0" max="14" value="6" step="1"><output class="qrg-tree-perspective-output">6</output></label>
@@ -103,11 +103,17 @@ function qrg_get_generator_markup() {
         </fieldset>
 
         <button type="button" class="qrg-generate"><?php esc_html_e('QR-Code erstellen', 'qr-code-generator'); ?></button>
+        <div class="qrg-view-toggle" role="group" aria-label="<?php esc_attr_e('Ansicht', 'qr-code-generator'); ?>" hidden>
+            <button type="button" class="qrg-view-scene" aria-pressed="true"><?php esc_html_e('Szene', 'qr-code-generator'); ?></button>
+            <button type="button" class="qrg-view-qr" aria-pressed="false"><?php esc_html_e('QR-Code', 'qr-code-generator'); ?></button>
+        </div>
         <div class="qrg-result" aria-live="polite"></div>
+        <p class="qrg-view-hint" hidden><?php esc_html_e('Tippe auf den Baum, um den scannbaren QR-Code zu sehen.', 'qr-code-generator'); ?></p>
         <p class="qrg-validation" role="status" hidden></p>
         <div class="qrg-downloads" hidden>
             <button type="button" class="qrg-download"><?php esc_html_e('PNG herunterladen', 'qr-code-generator'); ?></button>
             <button type="button" class="qrg-download-svg"><?php esc_html_e('SVG herunterladen', 'qr-code-generator'); ?></button>
+            <button type="button" class="qrg-download-scene"><?php esc_html_e('Szene als Bild (nur Illustration)', 'qr-code-generator'); ?></button>
         </div>
     </div>
     <?php

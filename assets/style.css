@@ -199,3 +199,65 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* [hidden] must win over the display rules above (grid/flex would otherwise override the attribute) */
+.qrg-container [hidden] {
+  display: none !important;
+}
+
+/* Scene / QR view switch (tap the tree to see the scannable code, like the reference) */
+.qrg-view-toggle {
+  display: inline-flex;
+  margin-top: 16px;
+  border: 1px solid #cfd6dc;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.qrg-container .qrg-view-toggle button {
+  padding: 8px 20px;
+  border-radius: 0;
+  background: #fff;
+  color: #33414d;
+}
+
+.qrg-container .qrg-view-toggle button[aria-pressed="true"] {
+  background: #0073aa;
+  color: #fff;
+}
+
+.qrg-view-hint {
+  margin: 8px 0 0;
+  color: #667380;
+  font-size: 13px;
+}
+
+.qrg-scene-canvas {
+  cursor: pointer;
+}
+
+/* Colour dots */
+.qrg-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-column: 1 / -1;
+  margin: 2px 0 6px;
+}
+
+.qrg-container .qrg-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #c5ccd2;
+}
+
+.qrg-container .qrg-swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 3px #0073aa;
+}
+
+.qrg-container .qrg-download-scene {
+  background: #5b6770;
+}

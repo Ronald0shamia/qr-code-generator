@@ -65,14 +65,14 @@
             density: clamp(Number(raw.density) || 72, 35, 100),
             perspective: clamp(Number(raw.perspective) || 6, 0, 14),
             shadow: raw.shadow !== false,
-            mode: raw.mode === 'artistic' ? 'artistic' : 'safe',
-            scene: raw.scene !== false,
+            mode: raw.mode === 'artistic' ? 'artistic' : (raw.mode === 'safe' ? 'safe' : 'garden'),
             quietZone: 4
         };
     }
 
     function moduleRole(row, column, count, options) {
         var x = (column + 0.5) / count, y = (row + 0.5) / count, distance, canopyWidth, density = options.mode === 'safe' ? Math.min(options.density, 78) : options.density;
+        if (options.mode === 'garden') { return isFinderOrSeparator(row, column, count) ? 'grass' : 'leaf'; }
         if (protectedModule(row, column, count)) { return 'anchor'; }
         if (y > 0.79) { return stableNoise(row, column) < 84 ? 'ground' : 'structure'; }
         if (y > 0.50 && y <= 0.83 && Math.abs(x - 0.5) < (y > 0.69 ? 0.075 : 0.13)) { return 'trunk'; }
@@ -86,7 +86,18 @@
         return 'structure';
     }
 
-    function roleColour(role, options) {
+    function luminance(hex) { var c = hexToRgb(hex); return Math.max((0.299 * c[0]) + (0.587 * c[1]) + (0.114 * c[2]), (0.2126 * c[0]) + (0.7152 * c[1]) + (0.0722 * c[2])); }
+    /* Keep every dark module dark enough for a decoder's light/dark threshold, whatever colour the user picked. */
+    function ensureDark(hex, maximum) { var value = luminance(hex); return value <= maximum ? hex : darker(hex, 1 - (maximum / value)); }
+    function tone(hex, amount) { return amount >= 0 ? lighter(hex, amount) : darker(hex, -amount); }
+    function gardenColour(role, options, row, column) {
+        var noise = (stableNoise(row, column) - 50) / 50;
+        if (role === 'grass') { return ensureDark(tone(mix(options.ground, '#9aa12c', 0.30 + (Math.abs(noise) * 0.30)), noise * 0.10), 74); }
+        return ensureDark(tone(options.blossom, noise * 0.16), 82);
+    }
+
+    function roleColour(role, options, row, column) {
+        if (role === 'leaf' || role === 'grass') { return gardenColour(role, options, row, column); }
         if (role === 'trunk' || role === 'branch') { return mix(options.structure, options.trunk, 0.78); }
         if (role === 'blossom') { return darker(options.blossom, 0.23); }
         if (role === 'foliage') { return mix(options.ground, options.blossom, 0.32); }
@@ -95,11 +106,13 @@
     }
 
     function moduleFaces(x, y, size, role, row, column, count, options, paint) {
-        var protectedCell = role === 'anchor', effectiveDepth = options.mode === 'safe' ? Math.min(options.depth, 8) : options.depth, depth = size * (effectiveDepth / 100), factor = protectedCell ? 0.48 : (0.55 + (options.perspective / 28)), top = Math.min(size * (protectedCell ? 0.15 : 0.30), depth * factor), side = Math.min(size * (protectedCell ? 0.12 : 0.23), depth * factor), base = options.mode === 'safe' ? options.structure : roleColour(role, options), accent = roleColour(role, options);
+        var protectedCell = role === 'anchor', effectiveDepth = options.mode === 'artistic' ? options.depth : Math.min(options.depth, 8), depth = size * (effectiveDepth / 100), factor = protectedCell ? 0.48 : (0.55 + (options.perspective / 28)), top = Math.min(size * (protectedCell ? 0.15 : 0.30), depth * factor), side = Math.min(size * (protectedCell ? 0.12 : 0.23), depth * factor), base = options.mode === 'safe' ? options.structure : roleColour(role, options, row, column), accent = roleColour(role, options, row, column);
+        /* Thick edge faces confuse decoders at large export sizes (tested): keep the bevel to a hairline unless in artistic mode. */
+        if (options.mode !== 'artistic') { top = size > 32 ? 0 : Math.min(top, 1); side = size > 32 ? 0 : Math.min(side, 1); }
         paint('base', x, y, size, top, side, base, role);
-        paint('top', x, y, size, top, side, lighter(base, protectedCell ? 0.08 : (options.mode === 'safe' ? 0.09 : 0.18)), role);
+        paint('top', x, y, size, top, side, lighter(base, protectedCell ? 0.08 : (options.mode === 'artistic' ? 0.18 : 0.12)), role);
         paint('side', x, y, size, top, side, darker(base, 0.22), role);
-        if (options.shadow && !protectedCell) { paint('shadow', x, y, size, Math.max(1, top * 0.34), side, '#000000', role); }
+        if (options.shadow && !protectedCell && options.mode === 'artistic') { paint('shadow', x, y, size, Math.max(1, top * 0.34), side, '#000000', role); }
         if (role === 'trunk' || role === 'branch' || role === 'blossom' || role === 'foliage' || role === 'ground') { paint('detail', x, y, size, top, side, options.mode === 'safe' ? mix(base, accent, 0.12) : (role === 'blossom' ? lighter(options.blossom, 0.22) : lighter(base, 0.16)), role); }
     }
 
@@ -131,11 +144,7 @@
     }
 
     /* ------------------------------------------------------------------
-     * Scene layer (diorama): trunk, branches, crown, platform, flowers.
-     * Everything is built as plain primitives so canvas and SVG share the
-     * exact same geometry. The scene is only ever drawn OUTSIDE the QR tile
-     * (code + quiet zone); the tile is painted last and covers anything that
-     * would overlap it, so the quiet zone stays free of graphics.
+     * Shared drawing primitives (canvas and SVG use the same geometry)
      * ------------------------------------------------------------------ */
     function ngon(cx, cy, radius, sides, rotation) {
         var points = [], i, angle;
@@ -148,115 +157,171 @@
         return poly([[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]], fill, 1);
     }
     function round2(value) { return Math.round(value * 100) / 100; }
-
-    function tileLayout(size, count, withScene) {
-        var span = count + 8, module, tile;
-        if (!withScene) { module = size / span; return { module: module, tile: size, x: 0, y: 0 }; }
-        module = Math.max(1, Math.floor((size * 0.54) / span));
-        tile = module * span;
-        return { module: module, tile: tile, x: Math.round((size - tile) / 2), y: Math.round(size * 0.36) };
-    }
-
-    function buildScene(size, layout, options) {
-        var back = [], front = [], tileTop = layout.y, tileBottom = layout.y + layout.tile, tileLeft = layout.x, tileRight = layout.x + layout.tile;
-        var inset = size * (0.06 + (options.perspective * 0.004)), backY = tileTop - (size * 0.045), frontY = Math.min(size * 0.93, tileBottom + (size * 0.03)), thickness = size * 0.035;
-        var soil = darker(mix(options.ground, options.trunk, 0.45), 0.12), lawnEdge = darker(options.ground, 0.16), lawnLight = lighter(options.ground, 0.16), soft = options.shadow;
-        var centerX = size / 2, crownY = size * 0.17, scale = 0.85 * (0.9 + ((options.depth - 16) / 14) * 0.2);
-        var topWidth = size * 0.045, baseWidth = size * 0.078, trunkTop = size * 0.27, trunkBase = tileTop + (size * 0.01);
-        var clusters = [[-0.22, 0.03, 0.085], [0.22, 0.03, 0.085], [-0.15, -0.04, 0.10], [0.15, -0.04, 0.10], [-0.08, 0.04, 0.09], [0.08, 0.04, 0.09], [0, -0.07, 0.11], [0, 0.0, 0.12]];
-        var branches = [[-0.20, 0.03], [0.20, 0.03], [-0.12, -0.03], [0.12, -0.03], [0, -0.06]];
-        var flowers = [[0.16, 0.46, 0], [0.19, 0.62, 1], [0.14, 0.80, 2], [0.84, 0.46, 1], [0.81, 0.62, 2], [0.86, 0.80, 0]];
-        var flowerColours = ['#ffffff', '#ffd1dc', '#ffe066'];
-        var gx, tuft, i, j, cluster, cx, cy, r, dots, dotCount, angle, distance, shadowRim;
-
-        function clearOfTile(left, top, right, bottom) { var margin = size * 0.004; return right < tileLeft - margin || left > tileRight + margin || bottom < tileTop - margin || top > tileBottom + margin; }
-
-        /* soft platform shadow */
-        if (soft) { for (i = 0; i < 4; i += 1) { back.push({ t: 'ellipse', cx: centerX, cy: frontY + thickness + (size * 0.012), rx: size * (0.47 - (i * 0.03)), ry: size * (0.030 - (i * 0.005)), fill: '#000000', op: 0.05 }); } }
-        /* platform: side thickness, lawn rim, lawn */
-        back.push(poly([[size * 0.05, frontY], [size * 0.95, frontY], [size * 0.95, frontY + thickness], [size * 0.05, frontY + thickness]], soil, 1));
-        back.push(poly([[size * 0.05, frontY + (thickness * 0.55)], [size * 0.95, frontY + (thickness * 0.55)], [size * 0.95, frontY + thickness], [size * 0.05, frontY + thickness]], darker(soil, 0.18), 1));
-        back.push(poly([[size * 0.05 + inset, backY], [size * 0.95 - inset, backY], [size * 0.95, frontY], [size * 0.05, frontY]], lawnEdge, 1));
-        shadowRim = size * 0.014;
-        back.push(poly([[size * 0.05 + inset + shadowRim, backY + shadowRim], [size * 0.95 - inset - shadowRim, backY + shadowRim], [size * 0.95 - shadowRim, frontY - shadowRim], [size * 0.05 + shadowRim, frontY - shadowRim]], options.ground, 1));
-        /* subtle ground structure */
-        for (i = 0; i < 46; i += 1) {
-            gx = size * (0.10 + ((stableNoise(i, 3) / 101) * 0.80)); tuft = backY + ((frontY - backY) * (0.08 + ((stableNoise(i, 7) / 101) * 0.84)));
-            back.push({ t: 'ellipse', cx: gx, cy: tuft, rx: size * 0.012, ry: size * 0.0045, fill: (i % 2 ? lawnLight : lawnEdge), op: 0.35 });
-        }
-        /* trunk (tapered, lit from the top left) and branches */
-        back.push(poly([[centerX - (topWidth / 2), trunkTop], [centerX + (topWidth / 2), trunkTop], [centerX + (baseWidth / 2), trunkBase], [centerX - (baseWidth / 2), trunkBase]], options.trunk, 1));
-        back.push(poly([[centerX - (topWidth / 2), trunkTop], [centerX - (topWidth / 6), trunkTop], [centerX - (baseWidth / 6), trunkBase], [centerX - (baseWidth / 2), trunkBase]], lighter(options.trunk, 0.18), 1));
-        back.push(poly([[centerX + (topWidth / 6), trunkTop], [centerX + (topWidth / 2), trunkTop], [centerX + (baseWidth / 2), trunkBase], [centerX + (baseWidth / 6), trunkBase]], darker(options.trunk, 0.22), 1));
-        branches.forEach(function (branch, index) { back.push(quad(centerX, trunkTop + (size * 0.012), centerX + (branch[0] * size * scale), crownY + (branch[1] * size * scale), size * (index < 2 ? 0.016 : 0.012), index % 2 ? darker(options.trunk, 0.12) : options.trunk)); });
-        /* crown: low-poly clusters, darker underside, highlight from the top left */
-        dotCount = Math.round((options.density / 100) * 16);
-        clusters.forEach(function (c, index) {
-            cx = centerX + (c[0] * size * scale); cy = crownY + (c[1] * size * scale); r = c[2] * size * scale;
-            back.push(poly(ngon(cx + (r * 0.10 * (options.depth / 22)), cy + (r * 0.13 * (options.depth / 22)), r, 9, index), darker(options.blossom, 0.34), 1));
-            back.push(poly(ngon(cx, cy, r * 0.96, 9, index), lighter(options.blossom, 0.10), 1));
-            back.push(poly(ngon(cx - (r * 0.22), cy - (r * 0.26), r * 0.58, 8, index + 0.4), lighter(options.blossom, 0.34), 0.6));
-            for (j = 0; j < dotCount; j += 1) {
-                angle = (stableNoise(index * 31 + j, 5) / 101) * Math.PI * 2; distance = Math.sqrt(stableNoise(index * 17 + j, 11) / 101) * r * 0.82;
-                back.push({ t: 'circle', cx: cx + (Math.cos(angle) * distance), cy: cy + (Math.sin(angle) * distance), r: size * 0.0065, fill: (j % 3 === 0 ? '#ffffff' : lighter(options.blossom, 0.5)), op: 0.85 });
-            }
-        });
-        /* foreground details: grass tufts and flowers, only where clear of the QR tile */
-        for (i = 0; i < 24; i += 1) {
-            gx = size * (0.09 + (i * 0.0335)); tuft = size * (0.010 + ((stableNoise(i, 9) / 101) * 0.010));
-            if (clearOfTile(gx, frontY - (size * 0.03), gx + (size * 0.01), frontY)) { front.push(poly([[gx, frontY - (size * 0.006)], [gx + (size * 0.009), frontY - (size * 0.006)], [gx + (size * 0.0045), frontY - (size * 0.006) - tuft]], lawnLight, 1)); }
-        }
-        flowers.forEach(function (flower) {
-            var fx = flower[0] * size, fy = flower[1] * size, fr = size * 0.0075;
-            if (!clearOfTile(fx - (fr * 3), fy - (fr * 3), fx + (fr * 3), fy + (fr * 3))) { return; }
-            for (i = 0; i < 5; i += 1) { front.push({ t: 'circle', cx: fx + (Math.cos(i * 1.2566) * fr * 1.5), cy: fy + (Math.sin(i * 1.2566) * fr * 1.5), r: fr, fill: flowerColours[flower[2]], op: 1 }); }
-            front.push({ t: 'circle', cx: fx, cy: fy, r: fr * 0.8, fill: '#e0a526', op: 1 });
-        });
-        if (soft) { back.push({ t: 'rect', x: tileLeft + (size * 0.007), y: tileTop + (size * 0.009), w: layout.tile, h: layout.tile, fill: '#000000', op: 0.16 }); }
-        return { back: back, front: front };
-    }
-
     function paintPrimitivesCanvas(context, primitives) {
         primitives.forEach(function (item) {
             context.globalAlpha = item.op; context.fillStyle = item.fill;
             if (item.t === 'poly') { context.beginPath(); item.pts.forEach(function (point, index) { if (index) { context.lineTo(point[0], point[1]); } else { context.moveTo(point[0], point[1]); } }); context.closePath(); context.fill(); }
-            else if (item.t === 'circle') { context.beginPath(); context.arc(item.cx, item.cy, item.r, 0, Math.PI * 2); context.fill(); }
             else if (item.t === 'ellipse') { context.beginPath(); context.ellipse(item.cx, item.cy, item.rx, item.ry, 0, 0, Math.PI * 2); context.fill(); }
             else { context.fillRect(item.x, item.y, item.w, item.h); }
         });
         context.globalAlpha = 1;
     }
 
-    function paintPrimitivesSvg(svg, primitives) {
-        primitives.forEach(function (item) {
-            var attributes = { fill: item.fill };
-            if (item.op !== 1) { attributes.opacity = String(item.op); }
-            if (item.t === 'poly') { attributes.points = pointString(item.pts.map(function (point) { return [round2(point[0]), round2(point[1])]; })); svg.appendChild(svgElement('polygon', attributes)); }
-            else if (item.t === 'circle') { attributes.cx = round2(item.cx); attributes.cy = round2(item.cy); attributes.r = round2(item.r); svg.appendChild(svgElement('circle', attributes)); }
-            else if (item.t === 'ellipse') { attributes.cx = round2(item.cx); attributes.cy = round2(item.cy); attributes.rx = round2(item.rx); attributes.ry = round2(item.ry); svg.appendChild(svgElement('ellipse', attributes)); }
-            else { attributes.x = round2(item.x); attributes.y = round2(item.y); attributes.width = round2(item.w); attributes.height = round2(item.h); svg.appendChild(svgElement('rect', attributes)); }
-        });
+    /* ------------------------------------------------------------------
+     * Flat view: the scannable QR code (this is what gets validated + downloaded)
+     * ------------------------------------------------------------------ */
+    function tileLayout(size, count) {
+        var span = count + 8, module = Math.max(1, Math.floor(size / span)), tile = module * span, offset = Math.floor((size - tile) / 2);
+        return { module: module, tile: tile, x: offset, y: offset };
     }
 
     function render(text, outputSize, rawOptions) {
-        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count, options.scene), canvas = document.createElement('canvas'), context, scene;
+        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count), canvas = document.createElement('canvas'), context;
         canvas.width = outputSize; canvas.height = outputSize; context = canvas.getContext('2d', { alpha: false }); context.fillStyle = options.background; context.fillRect(0, 0, outputSize, outputSize);
-        if (options.scene) { scene = buildScene(outputSize, layout, options); paintPrimitivesCanvas(context, scene.back); }
-        context.fillStyle = options.background; context.fillRect(layout.x, layout.y, layout.tile, layout.tile);
-        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { var left = Math.floor(layout.x + ((column + options.quietZone) * layout.module)), top = Math.floor(layout.y + ((row + options.quietZone) * layout.module)), right = Math.ceil(layout.x + ((column + options.quietZone + 1) * layout.module)), bottom = Math.ceil(layout.y + ((row + options.quietZone + 1) * layout.module)); renderCanvasModule(context, left, top, Math.max(right - left, bottom - top), moduleRole(row, column, count, options), row, column, count, options); } }); });
-        if (options.scene) { paintPrimitivesCanvas(context, scene.front); }
+        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { renderCanvasModule(context, layout.x + ((column + options.quietZone) * layout.module), layout.y + ((row + options.quietZone) * layout.module), layout.module, moduleRole(row, column, count, options), row, column, count, options); } }); });
         return { canvas: canvas, matrix: matrix };
     }
 
     function renderSvg(text, outputSize, rawOptions) {
-        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count, options.scene), scene, svg = svgElement('svg', { xmlns: NS, width: outputSize, height: outputSize, viewBox: '0 0 ' + outputSize + ' ' + outputSize, role: 'img', 'aria-label': '3D blossom tree QR code' });
+        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count), svg = svgElement('svg', { xmlns: NS, width: outputSize, height: outputSize, viewBox: '0 0 ' + outputSize + ' ' + outputSize, role: 'img', 'aria-label': '3D blossom tree QR code' });
         svg.appendChild(svgElement('rect', { width: outputSize, height: outputSize, fill: options.background }));
-        if (options.scene) { scene = buildScene(outputSize, layout, options); paintPrimitivesSvg(svg, scene.back); }
-        svg.appendChild(svgElement('rect', { x: layout.x, y: layout.y, width: layout.tile, height: layout.tile, fill: options.background }));
         matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { renderSvgModule(svg, layout.x + ((column + options.quietZone) * layout.module), layout.y + ((row + options.quietZone) * layout.module), layout.module, moduleRole(row, column, count, options), row, column, count, options); } }); });
-        if (options.scene) { paintPrimitivesSvg(svg, scene.front); }
         return new XMLSerializer().serializeToString(svg);
     }
 
-    window.QRGTreeRenderer = { render: render, renderSvg: renderSvg };
+    /* ------------------------------------------------------------------
+     * Scene view: isometric miniature diorama (illustration, driven by the QR matrix)
+     *  - the platform floor IS the QR code (rotated so the empty corner is at the back)
+     *  - the three finder patterns grow grass
+     *  - a voxel-style tree stands in the centre: tapered trunk, branches, dense leaf crown
+     * The scene is decorative: the tree hides part of the floor, so only the flat view is scan-validated.
+     * ------------------------------------------------------------------ */
+    function seededRandom(seed) {
+        return function () {
+            var t;
+            seed = (seed + 0x6D2B79F5) | 0;
+            t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+    function hashText(text) { var hash = 5381, i; for (i = 0; i < text.length; i += 1) { hash = (Math.imul(hash, 33) + text.charCodeAt(i)) | 0; } return hash; }
+
+    /* Scene leaves keep the palette hue but get a lively, light tone (plain lightening would wash colours out to beige/grey). */
+    function leafTone(hex, lightness) {
+        var c = hexToRgb(hex).map(function (v) { return v / 255; }), max = Math.max(c[0], c[1], c[2]), min = Math.min(c[0], c[1], c[2]), d = max - min, h = 0, sat, l = (max + min) / 2, q, p;
+        if (d) { h = max === c[0] ? ((c[1] - c[2]) / d) % 6 : (max === c[1] ? ((c[2] - c[0]) / d) + 2 : ((c[0] - c[1]) / d) + 4); h /= 6; if (h < 0) { h += 1; } }
+        sat = clamp(d ? d / (1 - Math.abs((2 * l) - 1)) : 0, 0.55, 0.85);
+        q = lightness < 0.5 ? lightness * (1 + sat) : lightness + sat - (lightness * sat); p = (2 * lightness) - q;
+        function channel(t) { t = (t + 1) % 1; if (t < 1 / 6) { return p + ((q - p) * 6 * t); } if (t < 0.5) { return q; } if (t < 2 / 3) { return p + ((q - p) * (2 / 3 - t) * 6); } return p; }
+        return '#' + [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)].map(function (v) { return Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0'); }).join('');
+    }
+
+    function buildDiorama(text, size, matrix, options) {
+        var N = matrix.length, M = N + 2, u = size / (2.15 * M), cx = size / 2, oy = (size * 0.64) - ((M * u) / 2), prims = [], random = seededRandom(hashText(text)), i, j, a, b, r, c, finder;
+        var leaf = leafTone(options.blossom, 0.67), grass = mix('#8ccf47', options.ground, 0.22), cream = '#efe9de', stone = '#c8c1b4', treeUnits = 1.15 * M, trunkUnits = 0.40 * treeUnits, crownRadius = 0.42 * M, crownZ = 0.66 * treeUnits, crownHalf = 0.32 * treeUnits, thickness = 0.9;
+        function P(wa, wb, z) { return [cx + ((wa - wb) * u), oy + (((wa + wb) * u) / 2) - (z * u)]; }
+        function cell(wa, wb, z, fill, opacity) { return poly([P(wa, wb, z), P(wa + 1, wb, z), P(wa + 1, wb + 1, z), P(wa, wb + 1, z)], fill, opacity); }
+        function inFinder(row, column) { return (row < 7 && column < 7) || (row < 7 && column >= N - 7) || (row >= N - 7 && column < 7); }
+
+        /* soft shadow below the platform + stone sides */
+        if (options.shadow) { for (i = 0; i < 4; i += 1) { prims.push({ t: 'ellipse', cx: cx, cy: P(M / 2, M / 2, -thickness)[1] + (u * 0.6), rx: M * u * (1.00 - (i * 0.05)), ry: M * u * (0.54 - (i * 0.03)), fill: '#5b4a35', op: 0.045 }); } }
+        prims.push(poly([P(0, M, 0), P(M, M, 0), P(M, M, -thickness), P(0, M, -thickness)], '#b4ada1', 1));
+        prims.push(poly([P(M, 0, 0), P(M, M, 0), P(M, M, -thickness), P(M, 0, -thickness)], '#968f83', 1));
+
+        /* floor: the QR matrix, rotated 180 degrees so the code-free corner points to the back */
+        for (b = 0; b < M; b += 1) {
+            for (a = 0; a < M; a += 1) {
+                i = a - 1; j = b - 1; c = N - 1 - i; r = N - 1 - j;
+                if (i < 0 || j < 0 || i >= N || j >= N) { r = -1; c = -1; }
+                finder = r >= 0 && inFinder(r, c);
+                if (r >= 0 && matrix[r][c]) {
+                    prims.push(cell(a, b, 0, finder ? tone(mix(options.ground, '#6a8f3a', 0.35), ((stableNoise(r, c) - 50) / 50) * 0.08) : tone(stone, ((stableNoise(r, c) - 50) / 50) * 0.05), 1));
+                } else {
+                    prims.push(poly([P(a, b + 1, 0.30), P(a + 1, b + 1, 0.30), P(a + 1, b + 1, 0), P(a, b + 1, 0)], darker(cream, 0.10), 1));
+                    prims.push(poly([P(a + 1, b, 0.30), P(a + 1, b + 1, 0.30), P(a + 1, b + 1, 0), P(a + 1, b, 0)], darker(cream, 0.20), 1));
+                    prims.push(cell(a, b, 0.30, tone(cream, (((r < 0 ? a * 7 + b : stableNoise(r, c)) % 21) - 10) / 10 * 0.025), 1));
+                }
+            }
+        }
+
+        /* crown shadow on the ground + fallen petals */
+        if (options.shadow) { for (i = 0; i < 3; i += 1) { prims.push({ t: 'ellipse', cx: cx, cy: P(M / 2, M / 2, 0.3)[1], rx: crownRadius * u * (1.30 - (i * 0.18)), ry: crownRadius * u * (0.65 - (i * 0.09)), fill: '#3a3226', op: 0.07 }); } }
+        for (i = 0; i < 90; i += 1) {
+            a = (M / 2) + ((random() - 0.5) * crownRadius * 2.3); b = (M / 2) + ((random() - 0.5) * crownRadius * 2.3);
+            if (Math.abs(a - (M / 2)) + Math.abs(b - (M / 2)) < 1.2 || a < 1 || b < 1 || a > M - 1 || b > M - 1) { continue; }
+            prims.push(poly(ngon(P(a, b, 0.32)[0], P(a, b, 0.32)[1], u * (0.28 + (random() * 0.25)), 5, random() * 6), i % 4 === 0 ? '#ffffff' : lighter(leaf, 0.12 + (random() * 0.25)), 0.92));
+        }
+
+        /* grass tufts on the three finder patterns */
+        for (b = 0; b < M; b += 1) {
+            for (a = 0; a < M; a += 1) {
+                i = a - 1; j = b - 1; c = N - 1 - i; r = N - 1 - j;
+                if (i < 0 || j < 0 || i >= N || j >= N || !matrix[r][c] || !inFinder(r, c)) { continue; }
+                for (finder = 0; finder < 6; finder += 1) {
+                    var baseX = a + 0.15 + (random() * 0.7), baseY = b + 0.15 + (random() * 0.7), height = 0.55 + (random() * 0.95), lean = (random() - 0.5) * 0.9, root = P(baseX, baseY, 0), width = u * 0.15;
+                    prims.push(poly([[root[0] - width, root[1]], [root[0] + width, root[1]], [root[0] + (lean * u), root[1] - (height * u)]], tone(grass, ((random() - 0.4) * 0.42)), 1));
+                }
+            }
+        }
+
+        /* trunk: tapered, lit from the top left, with bark strokes and a flared base */
+        (function () {
+            var base = P(M / 2, M / 2, 0), topY = base[1] - (trunkUnits * u), wb = 1.6 * u, wt = 0.95 * u, k;
+            prims.push(poly([[base[0] - (wb * 1.5), base[1] + (wb * 0.45)], [base[0] - wb, base[1] - (u * 0.3)], [base[0] + wb, base[1] - (u * 0.3)], [base[0] + (wb * 1.5), base[1] + (wb * 0.45)], [base[0], base[1] + (wb * 0.8)]], darker(options.trunk, 0.30), 1));
+            prims.push(poly([[base[0] - wb, base[1]], [base[0], base[1] + (wb * 0.45)], [base[0], topY + (wt * 0.45)], [base[0] - wt, topY]], lighter(options.trunk, 0.10), 1));
+            prims.push(poly([[base[0], base[1] + (wb * 0.45)], [base[0] + wb, base[1]], [base[0] + wt, topY], [base[0], topY + (wt * 0.45)]], darker(options.trunk, 0.28), 1));
+            for (k = 0; k < 14; k += 1) {
+                var side = random() < 0.5 ? -1 : 1, px = base[0] + (side * random() * wb * 0.8), py = base[1] - (random() * trunkUnits * u * 0.9);
+                prims.push(quad(px, py, px + ((random() - 0.5) * u * 0.1), py - (u * (0.4 + (random() * 0.9))), u * 0.12, darker(options.trunk, 0.45)));
+            }
+        }());
+
+        /* branches (drawn before the leaves, so the crown covers most of them) */
+        function branch(angle, length, rise, widthUnits, colour) {
+            var from = P(M / 2, M / 2, trunkUnits * (0.80 + (random() * 0.2))), to = P((M / 2) + (Math.cos(angle) * length), (M / 2) + (Math.sin(angle) * length), (trunkUnits * 0.95) + rise);
+            prims.push(quad(from[0], from[1], to[0], to[1], u * widthUnits, colour));
+        }
+        for (i = 0; i < 12; i += 1) { branch((i * Math.PI * 2 / 12) + (random() * 0.4), crownRadius * (0.38 + (random() * 0.40)), crownHalf * (0.35 + (random() * 0.9)), 0.42 - (i % 3) * 0.08, i % 2 ? darker(options.trunk, 0.18) : options.trunk); }
+
+        /* crown: many small leaf cards, sorted back to front; lighter on top and on the lit (left) side */
+        (function () {
+            var count = Math.round(1300 + (options.density * 22)), leaves = [], k, s, theta, phi, dx, dy, dz, light, shade;
+            for (k = 0; k < count; k += 1) {
+                s = 0.30 + (0.70 * Math.cbrt(random())); theta = random() * Math.PI * 2; phi = Math.acos((random() * 2) - 1);
+                dx = crownRadius * s * Math.sin(phi) * Math.cos(theta); dy = crownRadius * s * Math.sin(phi) * Math.sin(theta); dz = crownHalf * s * Math.cos(phi);
+                if (dz < -crownHalf * 0.22 && random() < 0.62) { continue; } /* open underside: trunk and branches stay visible, as in the reference */
+                light = clamp(0.42 + (0.34 * (dz / crownHalf)) + (0.30 * (-(dx - dy) / (crownRadius * 1.4))) + (0.30 * (s - 0.65)) + ((random() - 0.5) * 0.14), 0, 1);
+                shade = light < 0.5 ? mix(darker(leaf, 0.22), leaf, light * 2) : mix(leaf, lighter(leaf, 0.50), (light - 0.5) * 2);
+                leaves.push({ key: (dx + dy) + (dz * 0.5), x: P((M / 2) + dx, (M / 2) + dy, crownZ + dz), size: u * (0.85 + (random() * 1.1)), rot: random() * 6.28, fill: shade });
+            }
+            leaves.sort(function (first, second) { return first.key - second.key; });
+            var split = Math.floor(leaves.length * 0.45);
+            leaves.forEach(function (item, index) {
+                if (index === split) {
+                    /* branches that run between the back and front leaf layers: visible through gaps, like the reference */
+                    for (k = 0; k < 8; k += 1) { branch((Math.PI * 0.15) + ((k / 7) * Math.PI * 0.7), crownRadius * (0.40 + (random() * 0.30)), crownHalf * (0.30 + (random() * 0.55)), 0.30 - ((k % 3) * 0.05), k % 2 ? darker(options.trunk, 0.20) : options.trunk); }
+                }
+                prims.push(poly(ngon(item.x[0], item.x[1], item.size * 0.62, 5, item.rot), item.fill, 1));
+            });
+        }());
+
+        /* gently falling leaves */
+        for (i = 0; i < 26; i += 1) {
+            a = 2 + (random() * (M - 4)); b = 2 + (random() * (M - 4));
+            j = P(a, b, 1.5 + (random() * treeUnits * 0.85));
+            prims.push(poly(ngon(j[0], j[1], u * (0.28 + (random() * 0.2)), 5, random() * 6), lighter(leaf, random() * 0.3), 0.9));
+        }
+        return prims;
+    }
+
+    function renderScene(text, outputSize, rawOptions) {
+        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), canvas = document.createElement('canvas'), context;
+        canvas.width = outputSize; canvas.height = outputSize; context = canvas.getContext('2d', { alpha: false });
+        context.fillStyle = options.background; context.fillRect(0, 0, outputSize, outputSize);
+        paintPrimitivesCanvas(context, buildDiorama(text, outputSize, matrix, options));
+        return canvas;
+    }
+
+    window.QRGTreeRenderer = { render: render, renderSvg: renderSvg, renderScene: renderScene };
 }(window));

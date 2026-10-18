@@ -9,7 +9,9 @@
         blossom: { blossom: '#a63d57', trunk: '#754126', ground: '#356a45' },
         golden: { blossom: '#a66a22', trunk: '#754126', ground: '#52633a' },
         blue: { blossom: '#267e9b', trunk: '#754126', ground: '#356a45' },
-        purple: { blossom: '#70469b', trunk: '#754126', ground: '#356a45' }
+        purple: { blossom: '#70469b', trunk: '#754126', ground: '#356a45' },
+        red: { blossom: '#c23b3b', trunk: '#754126', ground: '#4a7a38' },
+        green: { blossom: '#3f8f3a', trunk: '#6b4326', ground: '#5a8f3a' }
     };
 
     function save(url, filename) {
@@ -104,6 +106,11 @@
         var perspective = container.querySelector('.qrg-tree-perspective');
         var perspectiveOutput = container.querySelector('.qrg-tree-perspective-output');
         var treeStyle = container.querySelector('.qrg-tree-style');
+        var viewToggle = container.querySelector('.qrg-view-toggle');
+        var viewScene = container.querySelector('.qrg-view-scene');
+        var viewQr = container.querySelector('.qrg-view-qr');
+        var viewHint = container.querySelector('.qrg-view-hint');
+        var sceneButton = container.querySelector('.qrg-download-scene');
         var renderToken = 0;
         var autoUpdate = false;
         var updateTimer = 0;
@@ -128,6 +135,34 @@
             container.querySelector('.qrg-tree-trunk').value = palette.trunk;
             container.querySelector('.qrg-tree-ground').value = palette.ground;
         });
+        (function buildSwatches() {
+            var dots = document.createElement('div'), label = treeStyle.closest('label');
+            dots.className = 'qrg-swatches'; dots.setAttribute('role', 'group'); dots.setAttribute('aria-label', 'Baumfarbe');
+            Object.keys(treePalettes).forEach(function (key) {
+                var dot = document.createElement('button');
+                dot.type = 'button'; dot.className = 'qrg-swatch'; dot.dataset.style = key; dot.style.backgroundColor = treePalettes[key].blossom;
+                dot.setAttribute('aria-label', treeStyle.querySelector('option[value="' + key + '"]').textContent);
+                dot.addEventListener('click', function () { treeStyle.value = key; treeStyle.dispatchEvent(new Event('change', { bubbles: true })); });
+                dots.appendChild(dot);
+            });
+            label.parentNode.insertBefore(dots, label.nextSibling);
+            function mark() { dots.querySelectorAll('.qrg-swatch').forEach(function (dot) { dot.setAttribute('aria-pressed', dot.dataset.style === treeStyle.value ? 'true' : 'false'); }); }
+            treeStyle.addEventListener('change', mark); mark();
+        }());
+
+        /* Two views of the same artwork, like the reference: the scene (illustration) and the flat, scan-validated QR code. */
+        var sceneCanvas = null, qrCanvas = null;
+        function showView(name) {
+            var scene = name === 'scene' && sceneCanvas;
+            if (sceneCanvas) { sceneCanvas.hidden = !scene; }
+            if (qrCanvas) { qrCanvas.hidden = !!scene; }
+            viewScene.setAttribute('aria-pressed', scene ? 'true' : 'false');
+            viewQr.setAttribute('aria-pressed', scene ? 'false' : 'true');
+            viewHint.hidden = !scene;
+        }
+        viewScene.addEventListener('click', function () { showView('scene'); });
+        viewQr.addEventListener('click', function () { showView('qr'); });
+
         updateControls();
 
         function run() {
@@ -137,6 +172,7 @@
             result.replaceChildren();
             downloads.hidden = true;
             notice.hidden = true;
+            viewToggle.hidden = true; viewHint.hidden = true; sceneCanvas = null; qrCanvas = null;
 
             if (!treeSelected()) {
                 new QRCode(result, {
@@ -183,6 +219,7 @@
                 generate.disabled = false;
                 result.replaceChildren();
                 downloads.hidden = true;
+                viewToggle.hidden = true; viewHint.hidden = true; sceneCanvas = null; qrCanvas = null;
                 showNotice(message || validationMessage, true);
             }
 
@@ -192,7 +229,21 @@
                 generate.disabled = false;
                 canvas.className = 'qrg-tree-canvas';
                 canvas.setAttribute('aria-label', '3D blossom tree QR code preview');
+                qrCanvas = canvas;
                 result.replaceChildren(canvas);
+                sceneCanvas = null;
+                try {
+                    sceneCanvas = QRGTreeRenderer.renderScene(text, Math.min(canvas.width, 1600), attempt.options);
+                    sceneCanvas.className = 'qrg-tree-canvas qrg-scene-canvas';
+                    sceneCanvas.setAttribute('aria-label', '3D Szene: Baum auf einer Plattform, deren Boden der QR-Code ist (Illustration, nicht zum Scannen)');
+                    sceneCanvas.title = 'Tippen, um den QR-Code zu sehen';
+                    sceneCanvas.addEventListener('click', function () { showView('qr'); });
+                    result.appendChild(sceneCanvas);
+                } catch (sceneError) { sceneCanvas = null; /* the scene is optional: the validated QR code is still delivered */ }
+                viewToggle.hidden = !sceneCanvas;
+                sceneButton.hidden = !sceneCanvas;
+                if (sceneCanvas) { sceneButton.onclick = function () { sceneCanvas.toBlob(function (blob) { if (blob) { saveBlob(blob, 'mrs-3d-tree-szene.png'); } }, 'image/png'); }; }
+                showView(sceneCanvas ? 'scene' : 'qr');
                 if (attempt.fallback) {
                     showNotice('Hinweis: Mit konservativeren Effekt-Einstellungen erzeugt, damit der Code zuverlässig scanbar ist.', false);
                 } else {
