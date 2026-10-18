@@ -66,6 +66,7 @@
             perspective: clamp(Number(raw.perspective) || 6, 0, 14),
             shadow: raw.shadow !== false,
             mode: raw.mode === 'artistic' ? 'artistic' : 'safe',
+            scene: raw.scene !== false,
             quietZone: 4
         };
     }
@@ -129,17 +130,131 @@
         });
     }
 
+    /* ------------------------------------------------------------------
+     * Scene layer (diorama): trunk, branches, crown, platform, flowers.
+     * Everything is built as plain primitives so canvas and SVG share the
+     * exact same geometry. The scene is only ever drawn OUTSIDE the QR tile
+     * (code + quiet zone); the tile is painted last and covers anything that
+     * would overlap it, so the quiet zone stays free of graphics.
+     * ------------------------------------------------------------------ */
+    function ngon(cx, cy, radius, sides, rotation) {
+        var points = [], i, angle;
+        for (i = 0; i < sides; i += 1) { angle = rotation + ((Math.PI * 2 * i) / sides); points.push([cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius]); }
+        return points;
+    }
+    function poly(points, fill, opacity) { return { t: 'poly', pts: points, fill: fill, op: opacity === undefined ? 1 : opacity }; }
+    function quad(x1, y1, x2, y2, width, fill) {
+        var dx = x2 - x1, dy = y2 - y1, length = Math.sqrt((dx * dx) + (dy * dy)) || 1, nx = (-dy / length) * (width / 2), ny = (dx / length) * (width / 2);
+        return poly([[x1 + nx, y1 + ny], [x2 + nx, y2 + ny], [x2 - nx, y2 - ny], [x1 - nx, y1 - ny]], fill, 1);
+    }
+    function round2(value) { return Math.round(value * 100) / 100; }
+
+    function tileLayout(size, count, withScene) {
+        var span = count + 8, module, tile;
+        if (!withScene) { module = size / span; return { module: module, tile: size, x: 0, y: 0 }; }
+        module = Math.max(1, Math.floor((size * 0.54) / span));
+        tile = module * span;
+        return { module: module, tile: tile, x: Math.round((size - tile) / 2), y: Math.round(size * 0.36) };
+    }
+
+    function buildScene(size, layout, options) {
+        var back = [], front = [], tileTop = layout.y, tileBottom = layout.y + layout.tile, tileLeft = layout.x, tileRight = layout.x + layout.tile;
+        var inset = size * (0.06 + (options.perspective * 0.004)), backY = tileTop - (size * 0.045), frontY = Math.min(size * 0.93, tileBottom + (size * 0.03)), thickness = size * 0.035;
+        var soil = darker(mix(options.ground, options.trunk, 0.45), 0.12), lawnEdge = darker(options.ground, 0.16), lawnLight = lighter(options.ground, 0.16), soft = options.shadow;
+        var centerX = size / 2, crownY = size * 0.17, scale = 0.85 * (0.9 + ((options.depth - 16) / 14) * 0.2);
+        var topWidth = size * 0.045, baseWidth = size * 0.078, trunkTop = size * 0.27, trunkBase = tileTop + (size * 0.01);
+        var clusters = [[-0.22, 0.03, 0.085], [0.22, 0.03, 0.085], [-0.15, -0.04, 0.10], [0.15, -0.04, 0.10], [-0.08, 0.04, 0.09], [0.08, 0.04, 0.09], [0, -0.07, 0.11], [0, 0.0, 0.12]];
+        var branches = [[-0.20, 0.03], [0.20, 0.03], [-0.12, -0.03], [0.12, -0.03], [0, -0.06]];
+        var flowers = [[0.16, 0.46, 0], [0.19, 0.62, 1], [0.14, 0.80, 2], [0.84, 0.46, 1], [0.81, 0.62, 2], [0.86, 0.80, 0]];
+        var flowerColours = ['#ffffff', '#ffd1dc', '#ffe066'];
+        var gx, tuft, i, j, cluster, cx, cy, r, dots, dotCount, angle, distance, shadowRim;
+
+        function clearOfTile(left, top, right, bottom) { var margin = size * 0.004; return right < tileLeft - margin || left > tileRight + margin || bottom < tileTop - margin || top > tileBottom + margin; }
+
+        /* soft platform shadow */
+        if (soft) { for (i = 0; i < 4; i += 1) { back.push({ t: 'ellipse', cx: centerX, cy: frontY + thickness + (size * 0.012), rx: size * (0.47 - (i * 0.03)), ry: size * (0.030 - (i * 0.005)), fill: '#000000', op: 0.05 }); } }
+        /* platform: side thickness, lawn rim, lawn */
+        back.push(poly([[size * 0.05, frontY], [size * 0.95, frontY], [size * 0.95, frontY + thickness], [size * 0.05, frontY + thickness]], soil, 1));
+        back.push(poly([[size * 0.05, frontY + (thickness * 0.55)], [size * 0.95, frontY + (thickness * 0.55)], [size * 0.95, frontY + thickness], [size * 0.05, frontY + thickness]], darker(soil, 0.18), 1));
+        back.push(poly([[size * 0.05 + inset, backY], [size * 0.95 - inset, backY], [size * 0.95, frontY], [size * 0.05, frontY]], lawnEdge, 1));
+        shadowRim = size * 0.014;
+        back.push(poly([[size * 0.05 + inset + shadowRim, backY + shadowRim], [size * 0.95 - inset - shadowRim, backY + shadowRim], [size * 0.95 - shadowRim, frontY - shadowRim], [size * 0.05 + shadowRim, frontY - shadowRim]], options.ground, 1));
+        /* subtle ground structure */
+        for (i = 0; i < 46; i += 1) {
+            gx = size * (0.10 + ((stableNoise(i, 3) / 101) * 0.80)); tuft = backY + ((frontY - backY) * (0.08 + ((stableNoise(i, 7) / 101) * 0.84)));
+            back.push({ t: 'ellipse', cx: gx, cy: tuft, rx: size * 0.012, ry: size * 0.0045, fill: (i % 2 ? lawnLight : lawnEdge), op: 0.35 });
+        }
+        /* trunk (tapered, lit from the top left) and branches */
+        back.push(poly([[centerX - (topWidth / 2), trunkTop], [centerX + (topWidth / 2), trunkTop], [centerX + (baseWidth / 2), trunkBase], [centerX - (baseWidth / 2), trunkBase]], options.trunk, 1));
+        back.push(poly([[centerX - (topWidth / 2), trunkTop], [centerX - (topWidth / 6), trunkTop], [centerX - (baseWidth / 6), trunkBase], [centerX - (baseWidth / 2), trunkBase]], lighter(options.trunk, 0.18), 1));
+        back.push(poly([[centerX + (topWidth / 6), trunkTop], [centerX + (topWidth / 2), trunkTop], [centerX + (baseWidth / 2), trunkBase], [centerX + (baseWidth / 6), trunkBase]], darker(options.trunk, 0.22), 1));
+        branches.forEach(function (branch, index) { back.push(quad(centerX, trunkTop + (size * 0.012), centerX + (branch[0] * size * scale), crownY + (branch[1] * size * scale), size * (index < 2 ? 0.016 : 0.012), index % 2 ? darker(options.trunk, 0.12) : options.trunk)); });
+        /* crown: low-poly clusters, darker underside, highlight from the top left */
+        dotCount = Math.round((options.density / 100) * 16);
+        clusters.forEach(function (c, index) {
+            cx = centerX + (c[0] * size * scale); cy = crownY + (c[1] * size * scale); r = c[2] * size * scale;
+            back.push(poly(ngon(cx + (r * 0.10 * (options.depth / 22)), cy + (r * 0.13 * (options.depth / 22)), r, 9, index), darker(options.blossom, 0.34), 1));
+            back.push(poly(ngon(cx, cy, r * 0.96, 9, index), lighter(options.blossom, 0.10), 1));
+            back.push(poly(ngon(cx - (r * 0.22), cy - (r * 0.26), r * 0.58, 8, index + 0.4), lighter(options.blossom, 0.34), 0.6));
+            for (j = 0; j < dotCount; j += 1) {
+                angle = (stableNoise(index * 31 + j, 5) / 101) * Math.PI * 2; distance = Math.sqrt(stableNoise(index * 17 + j, 11) / 101) * r * 0.82;
+                back.push({ t: 'circle', cx: cx + (Math.cos(angle) * distance), cy: cy + (Math.sin(angle) * distance), r: size * 0.0065, fill: (j % 3 === 0 ? '#ffffff' : lighter(options.blossom, 0.5)), op: 0.85 });
+            }
+        });
+        /* foreground details: grass tufts and flowers, only where clear of the QR tile */
+        for (i = 0; i < 24; i += 1) {
+            gx = size * (0.09 + (i * 0.0335)); tuft = size * (0.010 + ((stableNoise(i, 9) / 101) * 0.010));
+            if (clearOfTile(gx, frontY - (size * 0.03), gx + (size * 0.01), frontY)) { front.push(poly([[gx, frontY - (size * 0.006)], [gx + (size * 0.009), frontY - (size * 0.006)], [gx + (size * 0.0045), frontY - (size * 0.006) - tuft]], lawnLight, 1)); }
+        }
+        flowers.forEach(function (flower) {
+            var fx = flower[0] * size, fy = flower[1] * size, fr = size * 0.0075;
+            if (!clearOfTile(fx - (fr * 3), fy - (fr * 3), fx + (fr * 3), fy + (fr * 3))) { return; }
+            for (i = 0; i < 5; i += 1) { front.push({ t: 'circle', cx: fx + (Math.cos(i * 1.2566) * fr * 1.5), cy: fy + (Math.sin(i * 1.2566) * fr * 1.5), r: fr, fill: flowerColours[flower[2]], op: 1 }); }
+            front.push({ t: 'circle', cx: fx, cy: fy, r: fr * 0.8, fill: '#e0a526', op: 1 });
+        });
+        if (soft) { back.push({ t: 'rect', x: tileLeft + (size * 0.007), y: tileTop + (size * 0.009), w: layout.tile, h: layout.tile, fill: '#000000', op: 0.16 }); }
+        return { back: back, front: front };
+    }
+
+    function paintPrimitivesCanvas(context, primitives) {
+        primitives.forEach(function (item) {
+            context.globalAlpha = item.op; context.fillStyle = item.fill;
+            if (item.t === 'poly') { context.beginPath(); item.pts.forEach(function (point, index) { if (index) { context.lineTo(point[0], point[1]); } else { context.moveTo(point[0], point[1]); } }); context.closePath(); context.fill(); }
+            else if (item.t === 'circle') { context.beginPath(); context.arc(item.cx, item.cy, item.r, 0, Math.PI * 2); context.fill(); }
+            else if (item.t === 'ellipse') { context.beginPath(); context.ellipse(item.cx, item.cy, item.rx, item.ry, 0, 0, Math.PI * 2); context.fill(); }
+            else { context.fillRect(item.x, item.y, item.w, item.h); }
+        });
+        context.globalAlpha = 1;
+    }
+
+    function paintPrimitivesSvg(svg, primitives) {
+        primitives.forEach(function (item) {
+            var attributes = { fill: item.fill };
+            if (item.op !== 1) { attributes.opacity = String(item.op); }
+            if (item.t === 'poly') { attributes.points = pointString(item.pts.map(function (point) { return [round2(point[0]), round2(point[1])]; })); svg.appendChild(svgElement('polygon', attributes)); }
+            else if (item.t === 'circle') { attributes.cx = round2(item.cx); attributes.cy = round2(item.cy); attributes.r = round2(item.r); svg.appendChild(svgElement('circle', attributes)); }
+            else if (item.t === 'ellipse') { attributes.cx = round2(item.cx); attributes.cy = round2(item.cy); attributes.rx = round2(item.rx); attributes.ry = round2(item.ry); svg.appendChild(svgElement('ellipse', attributes)); }
+            else { attributes.x = round2(item.x); attributes.y = round2(item.y); attributes.width = round2(item.w); attributes.height = round2(item.h); svg.appendChild(svgElement('rect', attributes)); }
+        });
+    }
+
     function render(text, outputSize, rawOptions) {
-        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, module = outputSize / (count + options.quietZone * 2), canvas = document.createElement('canvas'), context;
+        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count, options.scene), canvas = document.createElement('canvas'), context, scene;
         canvas.width = outputSize; canvas.height = outputSize; context = canvas.getContext('2d', { alpha: false }); context.fillStyle = options.background; context.fillRect(0, 0, outputSize, outputSize);
-        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { var left = Math.floor((column + options.quietZone) * module), top = Math.floor((row + options.quietZone) * module), right = Math.ceil((column + options.quietZone + 1) * module), bottom = Math.ceil((row + options.quietZone + 1) * module); renderCanvasModule(context, left, top, Math.max(right - left, bottom - top), moduleRole(row, column, count, options), row, column, count, options); } }); });
+        if (options.scene) { scene = buildScene(outputSize, layout, options); paintPrimitivesCanvas(context, scene.back); }
+        context.fillStyle = options.background; context.fillRect(layout.x, layout.y, layout.tile, layout.tile);
+        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { var left = Math.floor(layout.x + ((column + options.quietZone) * layout.module)), top = Math.floor(layout.y + ((row + options.quietZone) * layout.module)), right = Math.ceil(layout.x + ((column + options.quietZone + 1) * layout.module)), bottom = Math.ceil(layout.y + ((row + options.quietZone + 1) * layout.module)); renderCanvasModule(context, left, top, Math.max(right - left, bottom - top), moduleRole(row, column, count, options), row, column, count, options); } }); });
+        if (options.scene) { paintPrimitivesCanvas(context, scene.front); }
         return { canvas: canvas, matrix: matrix };
     }
 
     function renderSvg(text, outputSize, rawOptions) {
-        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, module = outputSize / (count + options.quietZone * 2), svg = svgElement('svg', { xmlns: NS, width: outputSize, height: outputSize, viewBox: '0 0 ' + outputSize + ' ' + outputSize, role: 'img', 'aria-label': '3D blossom tree QR code' });
+        var options = normaliseOptions(rawOptions), matrix = createMatrix(text), count = matrix.length, layout = tileLayout(outputSize, count, options.scene), scene, svg = svgElement('svg', { xmlns: NS, width: outputSize, height: outputSize, viewBox: '0 0 ' + outputSize + ' ' + outputSize, role: 'img', 'aria-label': '3D blossom tree QR code' });
         svg.appendChild(svgElement('rect', { width: outputSize, height: outputSize, fill: options.background }));
-        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { renderSvgModule(svg, (column + options.quietZone) * module, (row + options.quietZone) * module, module, moduleRole(row, column, count, options), row, column, count, options); } }); });
+        if (options.scene) { scene = buildScene(outputSize, layout, options); paintPrimitivesSvg(svg, scene.back); }
+        svg.appendChild(svgElement('rect', { x: layout.x, y: layout.y, width: layout.tile, height: layout.tile, fill: options.background }));
+        matrix.forEach(function (line, row) { line.forEach(function (dark, column) { if (dark) { renderSvgModule(svg, layout.x + ((column + options.quietZone) * layout.module), layout.y + ((row + options.quietZone) * layout.module), layout.module, moduleRole(row, column, count, options), row, column, count, options); } }); });
+        if (options.scene) { paintPrimitivesSvg(svg, scene.front); }
         return new XMLSerializer().serializeToString(svg);
     }
 

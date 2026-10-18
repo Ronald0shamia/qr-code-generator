@@ -3,6 +3,8 @@
     'use strict';
 
     var validationMessage = 'Der 3D-QR-Code konnte nicht zuverlässig erkannt werden. Bitte versuchen Sie eine andere Einstellung.';
+    var encodeMessage = 'Dieser Inhalt kann im 3D-Modus nicht kodiert werden (zu lang oder nicht unterstützte Zeichen). Bitte kürzen Sie den Text oder nutzen Sie das Standard-Design.';
+    var CONSERVATIVE_OPTIONS = { mode: 'safe', depth: 16, density: 35, perspective: 0 };
     var treePalettes = {
         blossom: { blossom: '#a63d57', trunk: '#754126', ground: '#356a45' },
         golden: { blossom: '#a66a22', trunk: '#754126', ground: '#52633a' },
@@ -103,6 +105,8 @@
         var perspectiveOutput = container.querySelector('.qrg-tree-perspective-output');
         var treeStyle = container.querySelector('.qrg-tree-style');
         var renderToken = 0;
+        var autoUpdate = false;
+        var updateTimer = 0;
 
         if (!input || !generate || !result || !downloads || !window.QRCode || !window.QRGTreeRenderer) { return; }
         container.dataset.qrgReady = '1';
@@ -126,7 +130,7 @@
         });
         updateControls();
 
-        generate.addEventListener('click', function () {
+        function run() {
             var text = input.value.trim();
             var request = ++renderToken;
             if (!text) { input.focus(); return; }
@@ -154,46 +158,90 @@
                 return;
             }
 
-            generate.disabled = true;
+            autoUpdate = true;
+            renderTree(text, request);
+        }
+
+        function showNotice(message, isError) {
             notice.hidden = false;
-            notice.classList.remove('qrg-validation-error');
-            notice.textContent = '3D-QR-Code wird geprüft …';
-            window.requestAnimationFrame(function () {
+            notice.classList.toggle('qrg-validation-error', !!isError);
+            notice.textContent = message;
+        }
+
+        function renderTree(text, request) {
+            var base = readTreeOptions(container);
+            var exportSize = parseInt(container.querySelector('.qrg-export-size').value, 10);
+            var conservative = Object.assign({}, base, CONSERVATIVE_OPTIONS);
+            var attempts = [{ options: base, fallback: false }];
+            if (JSON.stringify(base) !== JSON.stringify(conservative)) { attempts.push({ options: conservative, fallback: true }); }
+
+            generate.disabled = true;
+            showNotice('3D-QR-Code wird geprüft …', false);
+
+            function fail(message) {
                 if (request !== renderToken) { return; }
-                var options = readTreeOptions(container);
-                var previewSize = Math.max(640, parseInt(size.value, 10) * 3);
-                var preview = QRGTreeRenderer.render(text, previewSize, options).canvas;
-                var exportCanvas = QRGTreeRenderer.render(text, parseInt(container.querySelector('.qrg-export-size').value, 10), options).canvas;
-                preview.className = 'qrg-tree-canvas';
-                preview.setAttribute('aria-label', '3D blossom tree QR code preview');
-                result.appendChild(preview);
-                validateArtwork(exportCanvas, text).then(function (valid) {
-                    if (request !== renderToken) { return; }
-                    generate.disabled = false;
-                    if (!valid) {
-                        notice.classList.add('qrg-validation-error');
-                        notice.textContent = validationMessage;
-                        return;
-                    }
+                generate.disabled = false;
+                result.replaceChildren();
+                downloads.hidden = true;
+                showNotice(message || validationMessage, true);
+            }
+
+            function succeed(canvas, attempt) {
+                if (request !== renderToken) { return; }
+                var svgArtwork;
+                generate.disabled = false;
+                canvas.className = 'qrg-tree-canvas';
+                canvas.setAttribute('aria-label', '3D blossom tree QR code preview');
+                result.replaceChildren(canvas);
+                if (attempt.fallback) {
+                    showNotice('Hinweis: Mit konservativeren Effekt-Einstellungen erzeugt, damit der Code zuverlässig scanbar ist.', false);
+                } else {
                     notice.hidden = true;
-                    downloads.hidden = false;
-                    svg.hidden = true;
-                    png.onclick = function () {
-                        exportCanvas.toBlob(function (blob) { if (blob) { saveBlob(blob, 'mrs-3d-tree-qr.png'); } }, 'image/png');
-                    };
-                    var svgArtwork = QRGTreeRenderer.renderSvg(text, exportCanvas.width, options);
-                    validateSvgArtwork(svgArtwork, exportCanvas.width, text).then(function (svgValid) {
-                        if (request !== renderToken || !svgValid) { return; }
-                        svg.hidden = false;
-                        svg.onclick = function () { saveBlob(new Blob([svgArtwork], { type: 'image/svg+xml;charset=utf-8' }), 'mrs-3d-tree-qr.svg'); };
-                    });
-                }).catch(function () {
-                    if (request !== renderToken) { return; }
-                    generate.disabled = false;
-                    notice.classList.add('qrg-validation-error');
-                    notice.textContent = validationMessage;
-                });
-            });
+                }
+                downloads.hidden = false;
+                svg.hidden = true;
+                png.onclick = function () {
+                    canvas.toBlob(function (blob) { if (blob) { saveBlob(blob, 'mrs-3d-tree-qr.png'); } }, 'image/png');
+                };
+                try { svgArtwork = QRGTreeRenderer.renderSvg(text, canvas.width, attempt.options); } catch (error) { return; }
+                validateSvgArtwork(svgArtwork, canvas.width, text).then(function (svgValid) {
+                    if (request !== renderToken || !svgValid) { return; }
+                    svg.hidden = false;
+                    svg.onclick = function () { saveBlob(new Blob([svgArtwork], { type: 'image/svg+xml;charset=utf-8' }), 'mrs-3d-tree-qr.svg'); };
+                }).catch(function () { /* SVG is optional: if it cannot be verified, only the PNG download is offered */ });
+            }
+
+            function attempt(index) {
+                var current = attempts[index], canvas;
+                if (request !== renderToken) { return; }
+                if (!current) { fail(); return; }
+                try {
+                    canvas = QRGTreeRenderer.render(text, exportSize, current.options).canvas;
+                } catch (error) {
+                    fail(encodeMessage); // the encoder rejected the content (too long / unsupported characters); retrying cannot help
+                    return;
+                }
+                // The validated image is the exact image shown as preview and offered for download.
+                validateArtwork(canvas, text).then(function (valid) {
+                    if (valid) { succeed(canvas, current); } else { attempt(index + 1); }
+                }).catch(function () { attempt(index + 1); });
+            }
+
+            window.requestAnimationFrame(function () { attempt(0); });
+        }
+
+        generate.addEventListener('click', run);
+
+        // Live preview: once a 3D result exists, setting changes re-render (debounced). Stale renders are discarded via renderToken.
+        function scheduleUpdate() {
+            if (!autoUpdate || !treeSelected() || !input.value.trim()) { return; }
+            window.clearTimeout(updateTimer);
+            updateTimer = window.setTimeout(run, 500);
+        }
+        container.addEventListener('input', scheduleUpdate);
+        container.addEventListener('change', function (event) {
+            if (event.target.classList && event.target.classList.contains('qrg-design-mode')) { return; }
+            scheduleUpdate();
         });
     }
 

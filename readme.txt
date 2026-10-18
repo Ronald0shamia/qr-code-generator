@@ -38,6 +38,14 @@ Das Plugin nutzt den Shortcode `[qr_generator]`, um das Tool auf einer beliebige
 
 == Changelog ==
 
+= 1.7 =
+* 3D Tree: isometrische Diorama-Szene um den QR-Code (Plattform mit Rasenkante und Seitendicke, konischer Stamm, Äste, Low-Poly-Blütenkrone, Blumen, weiche Schatten) - rein außerhalb von QR-Code und Ruhezone
+* Das angezeigte Vorschaubild ist exakt das validierte Exportbild (ein Render statt zwei)
+* Automatischer konservativer Fallback, wenn die Dekodierung der gewählten Einstellung fehlschlägt
+* Live-Aktualisierung der Vorschau nach Einstellungsänderungen (entprellt, veraltete Renderings werden verworfen)
+* Verständliche Fehlermeldung bei nicht kodierbarem Inhalt; Bedienelemente bleiben danach nutzbar
+* jsQR minifiziert (256 KB -> 130 KB)
+
 = 1.4 =
 * Root-Version mit Admin-Einstellungen konsolidiert
 * AJAX-Vorschau abgesichert und repariert

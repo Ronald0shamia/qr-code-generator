@@ -3,7 +3,7 @@
 Plugin Name: QR Code Generator
 Plugin URI: https://mrs-dev.com
 Description: Ein anpassbarer QR-Code-Generator mit Admin-Einstellungen, Shortcode und Download-Funktion.
-Version: 1.6
+Version: 1.7
 Author: Raeed
 Author URI: https://mrs-dev.com
 License: GPL2
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('QRG_VERSION', '1.6');
+define('QRG_VERSION', '1.7');
 define('QRG_PLUGIN_FILE', __FILE__);
 define('QRG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('QRG_PLUGIN_URL', plugin_dir_url(__FILE__));
